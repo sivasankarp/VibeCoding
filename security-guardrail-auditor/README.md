@@ -1,13 +1,42 @@
 # Enterprise Security Guardrail Auditor
 
+![Security dashboard](docs/assets/security-dashboard.png)
+
 API-first Terraform and CloudFormation security auditing platform: **FastAPI + SQLite + python-hcl2/PyYAML rule engine**, REST APIs, **dark dashboard** (Tailwind + Chart.js), Tagle-style report dashboard, Docker, GitHub Actions CI, and pytest coverage.
+
+## Why this project matters
+
+Cloud misconfigurations often start as small infrastructure-as-code decisions: a public bucket, an open SSH rule, an unencrypted database, or a wildcard IAM policy. This project demonstrates a local-first DevSecOps workflow that catches those risks before deployment and turns them into a visual, reviewer-friendly risk score.
+
+## Highlights
+
+- Scans Terraform and CloudFormation files for high-risk cloud security patterns
+- Flags public S3 buckets, open SSH/RDP, public RDS, encryption gaps, weak IAM, missing CloudTrail, and hardcoded secrets
+- Calculates a weighted 0-100 risk score and compliance percentage
+- Provides FastAPI REST endpoints plus Swagger documentation
+- Stores scan history in SQLite for local/free-tier operation
+- Includes visual dashboard, Tagle-style report page, Docker support, CI, linting, and pytest coverage
+
+## Screenshots
+
+### Security posture dashboard
+
+![Security posture dashboard](docs/assets/security-dashboard.png)
+
+### Tagle-style report
+
+![Tagle-style report](docs/assets/tagle-report.png)
+
+## Tech stack
+
+Python, FastAPI, SQLAlchemy, SQLite, python-hcl2, PyYAML, Jinja2, Tailwind CSS, Chart.js, Docker, Pytest, Ruff, GitHub Actions.
 
 ## Requirements
 
 - Python **3.12** (recommended) or **3.10+**
 - pip / venv (or Docker)
 
-## Quick start (local)
+## How to run locally
 
 ```bash
 cd security-guardrail-auditor
@@ -21,6 +50,16 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 Or: `bash scripts/dev.sh` (creates venv if missing, then runs Uvicorn).
 
 Open **http://127.0.0.1:8000/** for the **dashboard**, **http://127.0.0.1:8000/docs** for Swagger, **http://127.0.0.1:8000/tagle/report** for the Tagle-style report, and **http://127.0.0.1:8000/submission/urls** for team-share URLs.
+
+## LinkedIn / portfolio demo
+
+Use `docs/LINKEDIN_DEMO_SCRIPT.md` for a 60-second walkthrough script. The recommended demo flow is:
+
+1. Open the dashboard at `http://127.0.0.1:8000/`
+2. Open Swagger at `http://127.0.0.1:8000/docs`
+3. Upload `tests/fixtures/terraform/insecure.tf` or `tests/fixtures/cloudformation/insecure.yaml`
+4. Refresh the dashboard to show risk score and findings
+5. Open `http://127.0.0.1:8000/tagle/report`
 
 ## Docker
 
