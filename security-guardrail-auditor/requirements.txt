@@ -1,0 +1,23 @@
+# Core API
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.17
+
+# Data & validation
+sqlalchemy==2.0.36
+pydantic==2.10.3
+pydantic-settings==2.6.1
+
+# Terraform / files
+python-hcl2==4.3.5
+aiofiles==24.1.0
+
+# Templates
+jinja2==3.1.4
+
+# Dev & test
+pytest==8.3.4
+pytest-cov==6.0.0
+pytest-asyncio==0.24.0
+httpx==0.28.1
+ruff==0.8.3
