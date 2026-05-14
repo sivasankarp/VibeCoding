@@ -1,0 +1,16 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:////app/data/guardrail.db
+    volumes:
+      - guardrail-data:/app/data
+      - guardrail-uploads:/app/uploads
+      - guardrail-reports:/app/reports
+
+volumes:
+  guardrail-data:
+  guardrail-uploads:
+  guardrail-reports:

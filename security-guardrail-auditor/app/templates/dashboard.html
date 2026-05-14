@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ app_name }} — Security dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+  </head>
+  <body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
+    <div class="flex min-h-screen">
+      <aside class="hidden w-64 shrink-0 border-r border-slate-800 bg-slate-900/60 p-6 md:block">
+        <p class="text-xs uppercase tracking-[0.3em] text-emerald-400/80">Guardrail</p>
+        <h1 class="mt-2 text-lg font-semibold leading-snug">{{ app_name }}</h1>
+        <nav class="mt-8 flex flex-col gap-2 text-sm">
+          <a class="rounded-lg bg-emerald-500/10 px-3 py-2 text-emerald-200" href="/">Dashboard</a>
+          <a class="rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-800" href="/docs">API docs</a>
+          <a class="rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-800" href="/tagle/assessment">Tagle demo JSON</a>
+          <a class="rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-800" href="https://tagle.ai/quiz" target="_blank" rel="noopener"
+            >Tagle.ai quiz</a
+          >
+        </nav>
+      </aside>
+      <main class="flex-1 overflow-x-auto px-4 py-8 sm:px-8">
+        <header class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p class="text-xs uppercase tracking-[0.25em] text-slate-500">Overview</p>
+            <h2 class="text-2xl font-semibold tracking-tight text-white">Security posture</h2>
+            <p class="mt-1 max-w-2xl text-sm text-slate-400">
+              Terraform uploads are scanned locally. Metrics aggregate SQLite history. Use
+              <span class="font-mono text-emerald-300">POST /scan</span> from Swagger or curl to add data.
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button
+              id="btn-refresh"
+              type="button"
+              class="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-200 hover:border-emerald-500/60"
+            >
+              Refresh metrics
+            </button>
+            <a
+              class="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-emerald-400"
+              href="/docs"
+              >Open Swagger</a
+            >
+          </div>
+        </header>
+
+        <div id="toast" class="pointer-events-none fixed right-4 top-4 z-50 hidden translate-y-2 opacity-0 transition">
+          <div class="rounded-lg border border-emerald-500/40 bg-slate-900 px-4 py-2 text-sm text-emerald-100 shadow-lg">
+            <span id="toast-msg">Updated</span>
+          </div>
+        </div>
+
+        <div id="loading" class="mb-6 hidden rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3 text-sm text-slate-400">
+          Loading metrics…
+        </div>
+
+        <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <article class="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 shadow-inner shadow-black/30">
+            <p class="text-xs uppercase tracking-wide text-slate-500">Total scans</p>
+            <p id="m-total-scans" class="mt-2 text-3xl font-semibold text-white">{{ metrics.total_scans }}</p>
+          </article>
+          <article class="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 shadow-inner shadow-black/30">
+            <p class="text-xs uppercase tracking-wide text-slate-500">Total findings</p>
+            <p id="m-total-findings" class="mt-2 text-3xl font-semibold text-white">{{ metrics.total_findings }}</p>
+          </article>
+          <article class="rounded-2xl border border-rose-900/40 bg-rose-950/30 p-5 shadow-inner shadow-black/30">
+            <p class="text-xs uppercase tracking-wide text-rose-200/80">Critical findings</p>
+            <p id="m-critical" class="mt-2 text-3xl font-semibold text-rose-100">{{ metrics.critical_findings }}</p>
+          </article>
+          <article class="rounded-2xl border border-amber-900/40 bg-amber-950/20 p-5 shadow-inner shadow-black/30">
+            <p class="text-xs uppercase tracking-wide text-amber-200/80">Avg risk score</p>
+            <p id="m-avg-risk" class="mt-2 text-3xl font-semibold text-amber-100">{{ metrics.average_risk_score }}</p>
+            <p class="mt-1 text-xs text-slate-500">Compliance avg: <span id="m-avg-comp">{{ metrics.average_compliance_percent }}</span>%</p>
+          </article>
+        </section>
+
+        <section class="mt-8 grid gap-6 lg:grid-cols-3">
+          <div class="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 lg:col-span-1">
+            <h3 class="text-sm font-semibold text-white">Risk gauge</h3>
+            <p class="mt-1 text-xs text-slate-500">Higher = more weighted issues detected.</p>
+            <div class="relative mx-auto mt-6 h-40 w-40">
+              <svg viewBox="0 0 120 120" class="h-full w-full -rotate-90">
+                <circle cx="60" cy="60" r="52" stroke="#1e293b" stroke-width="12" fill="none" />
+                <circle
+                  id="risk-ring"
+                  cx="60"
+                  cy="60"
+                  r="52"
+                  stroke="url(#gradRisk)"
+                  stroke-width="12"
+                  fill="none"
+                  stroke-dasharray="326.7"
+                  stroke-dashoffset="326.7"
+                  stroke-linecap="round"
+                />
+                <defs>
+                  <linearGradient id="gradRisk" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#34d399" />
+                    <stop offset="100%" stop-color="#f97316" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                <span id="gauge-value" class="text-2xl font-bold text-white">{{ metrics.average_risk_score }}</span>
+                <span class="text-[10px] uppercase tracking-widest text-slate-500"> / 100</span>
+              </div>
+            </div>
+          </div>
+          <div class="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 lg:col-span-1">
+            <h3 class="text-sm font-semibold text-white">Severity mix</h3>
+            <canvas id="chart-severity" class="mt-4 max-h-56"></canvas>
+          </div>
+          <div class="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 lg:col-span-1">
+            <h3 class="text-sm font-semibold text-white">Risk trend</h3>
+            <canvas id="chart-trend" class="mt-4 max-h-56"></canvas>
+          </div>
+        </section>
+
+        <section class="mt-8 rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="text-sm font-semibold text-white">Recent findings</h3>
+            <span class="text-xs text-slate-500">Last 30 records</span>
+          </div>
+          <div class="mt-4 overflow-x-auto">
+            <table class="min-w-full text-left text-sm">
+              <thead class="border-b border-slate-800 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th class="px-3 py-2">Severity</th>
+                  <th class="px-3 py-2">Rule</th>
+                  <th class="px-3 py-2">Resource</th>
+                  <th class="px-3 py-2">Title</th>
+                  <th class="px-3 py-2">Scan</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/80">
+                {% for f in recent_findings %}
+                <tr class="hover:bg-slate-800/40">
+                  <td class="px-3 py-2">
+                    <span
+                      class="inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium
+                      {% if f.severity == 'critical' %}bg-rose-500/20 text-rose-200
+                      {% elif f.severity == 'high' %}bg-orange-500/20 text-orange-200
+                      {% elif f.severity == 'medium' %}bg-amber-500/20 text-amber-100
+                      {% else %}bg-slate-600/40 text-slate-200{% endif %}"
+                    >
+                      {{ f.severity }}
+                    </span>
+                  </td>
+                  <td class="px-3 py-2 font-mono text-xs text-emerald-200/90">{{ f.rule_id }}</td>
+                  <td class="px-3 py-2 text-slate-300">{{ f.resource_type or "—" }} / {{ f.resource_name or "—" }}</td>
+                  <td class="max-w-md truncate px-3 py-2 text-slate-300" title="{{ f.title }}">{{ f.title }}</td>
+                  <td class="px-3 py-2 text-slate-500">#{{ f.scan_id }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="5" class="px-3 py-6 text-center text-slate-500">No findings yet — run a scan from the API docs.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script id="metrics-bootstrap" type="application/json">{{ metrics_json | safe }}</script>
+    <script>
+      (function () {
+        const el = document.getElementById("metrics-bootstrap");
+        let metrics = {};
+        try {
+          metrics = JSON.parse(el.textContent || "{}");
+        } catch (e) {
+          metrics = {};
+        }
+
+        const circumference = 2 * Math.PI * 52;
+        const ring = document.getElementById("risk-ring");
+
+        function setGauge(score) {
+          const v = Math.max(0, Math.min(100, Number(score) || 0));
+          const offset = circumference * (1 - v / 100);
+          ring.style.strokeDashoffset = String(offset);
+        }
+
+        let chartSeverity;
+        let chartTrend;
+
+        function buildCharts(m) {
+          const sev = m.severity_distribution || {};
+          const labels = ["critical", "high", "medium", "low"];
+          const data = [sev.critical || 0, sev.high || 0, sev.medium || 0, sev.low || 0];
+          const ctx = document.getElementById("chart-severity");
+          if (chartSeverity) chartSeverity.destroy();
+          chartSeverity = new Chart(ctx, {
+            type: "doughnut",
+            data: {
+              labels,
+              datasets: [
+                {
+                  data,
+                  backgroundColor: ["#fb7185", "#fb923c", "#fbbf24", "#64748b"],
+                  borderWidth: 0,
+                },
+              ],
+            },
+            options: {
+              plugins: { legend: { labels: { color: "#e2e8f0" } } },
+              animation: { duration: 700, easing: "easeOutQuart" },
+            },
+          });
+
+          const trend = m.risk_trend || [];
+          const tctx = document.getElementById("chart-trend");
+          if (chartTrend) chartTrend.destroy();
+          chartTrend = new Chart(tctx, {
+            type: "line",
+            data: {
+              labels: trend.map((p) => new Date(p.created_at).toLocaleString()),
+              datasets: [
+                {
+                  label: "Risk score",
+                  data: trend.map((p) => (p.risk_score == null ? null : p.risk_score)),
+                  borderColor: "#34d399",
+                  backgroundColor: "rgba(52,211,153,0.15)",
+                  tension: 0.25,
+                  fill: true,
+                },
+              ],
+            },
+            options: {
+              scales: {
+                x: { ticks: { color: "#94a3b8", maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } },
+                y: { min: 0, max: 100, ticks: { color: "#94a3b8" }, grid: { color: "#1e293b" } },
+              },
+              plugins: { legend: { labels: { color: "#e2e8f0" } } },
+            },
+          });
+        }
+
+        function applyMetrics(m) {
+          document.getElementById("m-total-scans").textContent = m.total_scans ?? 0;
+          document.getElementById("m-total-findings").textContent = m.total_findings ?? 0;
+          document.getElementById("m-critical").textContent = m.critical_findings ?? 0;
+          document.getElementById("m-avg-risk").textContent = m.average_risk_score ?? 0;
+          document.getElementById("m-avg-comp").textContent = m.average_compliance_percent ?? 0;
+          document.getElementById("gauge-value").textContent = m.average_risk_score ?? 0;
+          setGauge(m.average_risk_score ?? 0);
+          buildCharts(m);
+        }
+
+        applyMetrics(metrics);
+        ring.style.strokeDasharray = String(circumference);
+
+        function showToast(msg) {
+          const t = document.getElementById("toast");
+          document.getElementById("toast-msg").textContent = msg;
+          t.classList.remove("hidden", "opacity-0", "translate-y-2");
+          setTimeout(() => {
+            t.classList.add("opacity-0", "translate-y-2");
+            setTimeout(() => t.classList.add("hidden"), 300);
+          }, 2200);
+        }
+
+        document.getElementById("btn-refresh").addEventListener("click", async () => {
+          const loading = document.getElementById("loading");
+          loading.classList.remove("hidden");
+          try {
+            const r = await fetch("/metrics");
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            const m = await r.json();
+            applyMetrics(m);
+            showToast("Metrics refreshed");
+          } catch (e) {
+            showToast("Refresh failed");
+          } finally {
+            loading.classList.add("hidden");
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

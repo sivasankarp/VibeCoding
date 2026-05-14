@@ -1,8 +1,8 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_DB_PATH = PROJECT_ROOT / "data" / "guardrail.db"
@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     upload_dir: Path = PROJECT_ROOT / "uploads"
     reports_dir: Path = PROJECT_ROOT / "reports"
     max_upload_mb: int = 16
+
+    tagle_assessment_json_path: Path | None = Field(
+        default=None,
+        validation_alias="TAGLE_ASSESSMENT_JSON",
+        description="Optional path to a Tagle-style assessment JSON export.",
+    )
 
 
 @lru_cache

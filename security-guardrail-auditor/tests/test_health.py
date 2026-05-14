@@ -1,7 +1,6 @@
 import pytest
-from fastapi.testclient import TestClient
-
 from app.main import app
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture()
@@ -20,4 +19,4 @@ def test_health_endpoint(client: TestClient) -> None:
 def test_root_renders_dashboard_stub(client: TestClient) -> None:
     response = client.get("/")
     assert response.status_code == 200
-    assert "Phase 1" in response.text
+    assert "Security posture" in response.text

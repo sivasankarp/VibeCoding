@@ -1,0 +1,54 @@
+{
+  "assessment_id": "demo-architect-001",
+  "source": "bundled_sample",
+  "completed_at": "2026-05-14T14:00:00Z",
+  "quiz_url": "https://tagle.ai/quiz",
+  "archetype": "architect",
+  "archetype_summary": "Architects go deep while others scan the headlines. They read model cards, run benchmarks, and understand why one prompting pattern outperforms another.",
+  "maturity": {
+    "stage_number": 9,
+    "stage_key": "confident-operator",
+    "label": "Confident Operator",
+    "mindset_tier": "Confident",
+    "skills_tier": "Operator"
+  },
+  "tagle_score": 78.5,
+  "dimensions": [
+    {
+      "key": "growth_orientation",
+      "label": "Growth orientation",
+      "score": 82.0,
+      "summary": "Treats setbacks as learning signals; revisits tools that previously failed."
+    },
+    {
+      "key": "experimental_courage",
+      "label": "Experimental courage",
+      "score": 74.0,
+      "summary": "Comfortable shipping small experiments before full certainty."
+    },
+    {
+      "key": "strategic_clarity",
+      "label": "Strategic clarity",
+      "score": 80.0,
+      "summary": "Chooses tools and workflows tied to measurable outcomes."
+    },
+    {
+      "key": "collaborative_ai_literacy",
+      "label": "Collaborative AI literacy",
+      "score": 71.0,
+      "summary": "Documents prompts and patterns teammates can reuse."
+    },
+    {
+      "key": "ethical_guardrails",
+      "label": "Ethical guardrails",
+      "score": 85.0,
+      "summary": "Checks data handling, attribution, and failure modes before rollout."
+    }
+  ],
+  "action_plan_highlights": [
+    "Add evaluation harnesses for the top three prompts your team relies on weekly.",
+    "Pair depth on one frontier model with a lightweight cross-model sanity check.",
+    "Mentor one teammate through their first successful automation using your playbook."
+  ],
+  "disclaimer": "This JSON is a bundled engineering sample aligned with public Tagle.ai taxonomy (archetypes + 12-stage spectrum). It is not an individual psychological assessment from tagle.ai servers."
+}

@@ -1,15 +1,17 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
 
 from app import __version__
-from app.api.routes import health
+from app.api.routes import guardrail, health, tagle
 from app.core.config import PROJECT_ROOT, settings
-from app.core.database import init_db
+from app.core.database import get_db, init_db
+from app.services import metrics_service
 
 
 @asynccontextmanager
@@ -34,16 +36,19 @@ def create_app() -> FastAPI:
     )
 
     application.include_router(health.router)
+    application.include_router(guardrail.router)
+    application.include_router(tagle.router)
 
     static_dir = Path(__file__).parent / "static"
     application.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
     @application.get("/", response_class=HTMLResponse)
-    async def root(request: Request) -> HTMLResponse:
+    async def dashboard(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+        ctx = metrics_service.dashboard_context(db)
         return templates.TemplateResponse(
             request,
-            "index.html",
-            {"app_name": settings.app_name},
+            "dashboard.html",
+            {"app_name": settings.app_name, **ctx},
         )
 
     return application

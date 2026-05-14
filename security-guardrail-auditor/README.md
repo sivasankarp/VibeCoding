@@ -1,71 +1,116 @@
 # Enterprise Security Guardrail Auditor
 
-API-first security auditing platform for Terraform. **Phase 1** delivers the FastAPI shell, SQLite persistence layer, ORM models, health checks, and a minimal dark-themed landing page. Terraform scanning, the rule engine, dashboards, and Docker/CI ship in later phases.
+API-first Terraform security auditing platform: **FastAPI + SQLite + python-hcl2 rule engine**, REST APIs, **dark dashboard** (Tailwind + Chart.js), Docker, GitHub Actions CI, and pytest coverage.
 
 ## Requirements
 
-- Python **3.12** (recommended). The project runs on **3.10+** when wheels are available for your platform.
-- pip / venv
+- Python **3.12** (recommended) or **3.10+**
+- pip / venv (or Docker)
 
-## Quick start
+## Quick start (local)
 
 ```bash
 cd security-guardrail-auditor
-python3.12 -m venv .venv   # or: python3 -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env        # optional overrides
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+cp .env.example .env        # optional
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Open `http://127.0.0.1:8000/` for the UI stub, `http://127.0.0.1:8000/docs` for OpenAPI, and `http://127.0.0.1:8000/health` for JSON health.
+Or: `bash scripts/dev.sh` (creates venv if missing, then runs Uvicorn).
 
-## Phase 1 architecture
+Open **http://127.0.0.1:8000/** for the **dashboard**, **http://127.0.0.1:8000/docs** for Swagger, **http://127.0.0.1:8000/health** for liveness.
+
+## Docker
+
+```bash
+docker compose up --build
+```
+
+App listens on **http://127.0.0.1:8000** (mapped from container). SQLite and uploads use named volumes (`docker-compose.yml`).
+
+## REST API (MVP)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Liveness |
+| POST | `/scan` | Multipart upload: `files` (repeatable `.tf`), optional `name` |
+| GET | `/scans` | Recent scans + finding counts |
+| GET | `/findings` | Optional `scan_id`, `limit`, `offset` |
+| GET | `/findings/{id}` | Single finding |
+| GET | `/metrics` | Aggregates + severity distribution + risk trend |
+| DELETE | `/scan/{id}` | Remove scan (cascades findings/files/audit rows) |
+| GET | `/tagle/assessment` | Tagle-style demo JSON (bundled sample) |
+| GET | `/tagle/about` | Tagle integration notes |
+
+### Example: scan from CLI
+
+```bash
+curl -sS -X POST "http://127.0.0.1:8000/scan" \
+  -F "name=demo" \
+  -F "files=@tests/fixtures/terraform/insecure.tf"
+```
+
+## Rule engine (high level)
+
+Rules cover, among others: **public S3 ACLs**, **S3 public access block disabled**, **open security groups (SSH/RDP/all)**, **public RDS**, **unencrypted RDS/EBS**, **public EC2**, **IAM wildcard policies** (string/jsonencode heuristics), **DynamoDB SSE off**, **broad NACL allows**, **missing CloudTrail resource**, **hardcoded secrets / AKIA patterns** in raw `.tf` text.
+
+Each finding includes **remediation** and a **Terraform fix snippet** (AI-style recommendation template).
+
+## Risk scoring
+
+Weighted severities (**critical=10, high=7, medium=5, low=2**) roll into a **0–100 risk score** and **compliance %** stored on each completed scan (`summary_json` holds severity counts and weighted points).
+
+## Architecture
 
 ```mermaid
-flowchart LR
-  subgraph client [Client]
-    Browser[Browser]
-    APIClient[API clients]
+flowchart TB
+  subgraph ui [Browser]
+    Dash[Dashboard /]
+    Docs[Swagger /docs]
   end
-  subgraph app [FastAPI app]
-    Routes[Routes /health + /]
-    Lifespan[Lifespan: mkdir + init_db]
+  subgraph api [FastAPI]
+    G[guardrail routes]
+    T[tagle routes]
+    H[health]
   end
-  subgraph data [Persistence]
-    SQLite[(SQLite guardrail.db)]
+  subgraph core [Core]
+    ScanSvc[scan_service]
+    MetSvc[metrics_service]
+    Eng[scanners.engine]
   end
-  Browser --> Routes
-  APIClient --> Routes
-  Lifespan --> SQLite
-  Routes --> SQLite
+  subgraph store [SQLite]
+    DB[(guardrail.db)]
+  end
+  Dash --> G
+  Dash --> MetSvc
+  Docs --> G
+  G --> ScanSvc
+  ScanSvc --> Eng
+  ScanSvc --> DB
+  MetSvc --> DB
+  T --> DB
 ```
 
-- **`app/core`**: environment-driven `Settings`, SQLAlchemy engine/session, `init_db()` metadata bootstrap.
-- **`app/models`**: `scans`, `findings`, `uploaded_files`, `audit_logs` with relationships and cascade rules.
-- **`app/api`**: versioned route modules (health in Phase 1).
-- **`app/main.py`**: application factory, static mount, Jinja2 templates, lifespan hooks.
-- **`data/`**, **`uploads/`**, **`reports/`**: local directories (gitignored artifacts, `.gitkeep` for structure).
-
-## Tests
+## Tests & lint
 
 ```bash
 pytest
+ruff check app tests
 ```
 
-## Environment variables
+## Tagle.ai (optional demo)
 
-See `.env.example`. `DATABASE_URL` defaults to `sqlite:///<project>/data/guardrail.db` when not set.
+Bundled **Tagle-style** JSON and `/tagle/*` routes are documented under **Tagle.ai integration** in earlier commits; see `data/TAGLE_AI_TEST_RESULTS.md` and `GET /tagle/about`.
 
-## Roadmap (from master plan)
+## Deliverables (portfolio)
 
-| Phase | Scope |
-|-------|--------|
-| 2 | Terraform parser (`python-hcl2`) + security rule engine |
-| 3 | Scan/findings/metrics REST APIs + persistence wiring |
-| 4 | Dashboard (Tailwind + Chart.js) |
-| 5 | Docker, GitHub Actions, expanded pytest coverage |
-| 6 | Hardening, polish, documentation |
+See **docs/DELIVERABLES.md** for PPT outline, resume bullets, and interview talking points.
+
+## CI
+
+GitHub Actions workflow **`.github/workflows/ci.yml`** runs **ruff** + **pytest** on Python 3.11 and 3.12.
 
 ## License
 
