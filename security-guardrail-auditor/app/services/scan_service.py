@@ -10,7 +10,12 @@ from app.models.audit_log import AuditLog
 from app.models.finding import Finding
 from app.models.scan import Scan, ScanStatus
 from app.models.uploaded_file import UploadedFile
-from app.scanners.engine import collect_raw_findings, compute_risk_scores
+from app.scanners.cfn_parser import parse_cfn_string
+from app.scanners.engine import (
+    collect_cloudformation_findings,
+    collect_raw_findings,
+    compute_risk_scores,
+)
 from app.scanners.hcl_parser import parse_hcl_string
 
 
@@ -20,8 +25,9 @@ def run_scan_from_text_files(db: Session, scan_name: str | None, files: list[tup
 
     ``files`` is a list of (logical_filename, utf-8 text).
     """
-    if not any(name.lower().endswith(".tf") for name, _ in files):
-        raise ValueError("At least one .tf file is required.")
+    supported_suffixes = (".tf", ".json", ".yaml", ".yml")
+    if not any(name.lower().endswith(supported_suffixes) for name, _ in files):
+        raise ValueError("At least one Terraform (.tf) or CloudFormation (.json/.yaml/.yml) file is required.")
 
     scan = Scan(name=scan_name, status=ScanStatus.processing.value)
     db.add(scan)
@@ -39,8 +45,10 @@ def run_scan_from_text_files(db: Session, scan_name: str | None, files: list[tup
     )
     db.flush()
 
-    parsed: list[tuple[str, dict]] = []
-    raw_by_path: dict[str, str] = {}
+    parsed_tf: list[tuple[str, dict]] = []
+    parsed_cfn: list[tuple[str, dict]] = []
+    raw_tf_by_path: dict[str, str] = {}
+    raw_cfn_by_path: dict[str, str] = {}
 
     try:
         for logical_name, text in files:
@@ -58,14 +66,21 @@ def run_scan_from_text_files(db: Session, scan_name: str | None, files: list[tup
                 )
             )
 
-            if not logical_name.lower().endswith(".tf"):
+            lower_name = logical_name.lower()
+            if not lower_name.endswith(supported_suffixes):
                 continue
 
-            raw_by_path[logical_name] = text
-            parsed_doc = parse_hcl_string(text, logical_name)
-            parsed.append((logical_name, parsed_doc))
+            if lower_name.endswith(".tf"):
+                raw_tf_by_path[logical_name] = text
+                parsed_doc = parse_hcl_string(text, logical_name)
+                parsed_tf.append((logical_name, parsed_doc))
+            else:
+                raw_cfn_by_path[logical_name] = text
+                parsed_doc = parse_cfn_string(text, logical_name)
+                parsed_cfn.append((logical_name, parsed_doc))
 
-        raw_findings = collect_raw_findings(parsed, raw_by_path)
+        raw_findings = collect_raw_findings(parsed_tf, raw_tf_by_path)
+        raw_findings.extend(collect_cloudformation_findings(parsed_cfn, raw_cfn_by_path))
         risk_score, compliance, summary = compute_risk_scores(raw_findings)
 
         for rf in raw_findings:

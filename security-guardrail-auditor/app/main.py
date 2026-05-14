@@ -8,7 +8,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app import __version__
-from app.api.routes import guardrail, health, tagle
+from app.api.routes import guardrail, health, submission, tagle
 from app.core.config import PROJECT_ROOT, settings
 from app.core.database import get_db, init_db
 from app.services import metrics_service
@@ -38,6 +38,7 @@ def create_app() -> FastAPI:
     application.include_router(health.router)
     application.include_router(guardrail.router)
     application.include_router(tagle.router)
+    application.include_router(submission.router)
 
     static_dir = Path(__file__).parent / "static"
     application.mount("/static", StaticFiles(directory=str(static_dir)), name="static")

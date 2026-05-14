@@ -1,0 +1,13 @@
+.venv
+__pycache__
+.pytest_cache
+.ruff_cache
+.coverage
+.DS_Store
+data/*.db
+uploads/*
+reports/*
+!uploads/.gitkeep
+!reports/.gitkeep
+.git
+.github

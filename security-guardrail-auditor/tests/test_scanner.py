@@ -1,6 +1,11 @@
 from pathlib import Path
 
-from app.scanners.engine import collect_raw_findings, compute_risk_scores
+from app.scanners.cfn_parser import parse_cfn_string
+from app.scanners.engine import (
+    collect_cloudformation_findings,
+    collect_raw_findings,
+    compute_risk_scores,
+)
 from app.scanners.hcl_parser import parse_hcl_string
 
 
@@ -42,3 +47,18 @@ def test_password_literal_detected_in_raw_text() -> None:
     doc = parse_hcl_string(text, "pw.tf")
     findings = collect_raw_findings([("pw.tf", doc)], {"pw.tf": text})
     assert any(f.rule_id == "HARDCODED_PASSWORD" for f in findings)
+
+
+def test_cloudformation_fixture_triggers_guardrails() -> None:
+    p = Path(__file__).resolve().parent / "fixtures" / "cloudformation" / "insecure.yaml"
+    text = p.read_text(encoding="utf-8")
+    doc = parse_cfn_string(text, "insecure.yaml")
+    findings = collect_cloudformation_findings([("insecure.yaml", doc)], {"insecure.yaml": text})
+    rule_ids = {f.rule_id for f in findings}
+    assert "CFN_S3_PUBLIC_ACL" in rule_ids
+    assert "CFN_SG_OPEN_SSH" in rule_ids
+    assert "CFN_RDS_PUBLIC" in rule_ids
+    assert "CFN_RDS_UNENCRYPTED" in rule_ids
+    assert "CFN_IAM_WILDCARD_ACTION" in rule_ids
+    assert "CFN_IAM_WILDCARD_RESOURCE" in rule_ids
+    assert "CFN_CLOUDTRAIL_MISSING" in rule_ids

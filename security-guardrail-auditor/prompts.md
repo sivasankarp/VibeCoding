@@ -5,6 +5,15 @@ This file records user prompts, assistant actions, files touched, commands run, 
 **Timer baseline (UTC):** 2026-05-14T13:22:36Z  
 **MVP target:** 4–6 hours elapsed from baseline  
 **Maximum window:** 16 hours  
+**Current version:** 0.2.0
+
+## Required initial execution prompt
+
+"Lead Architect mode: ON. We are building a Python-based, API-first Enterprise Security Guardrail Auditor using a free database and a dashboard.
+Rules:  
+• No Manual Edits: You provide all logic and fixes. I will not edit any code.  
+• Audit Log: You must maintain a file named prompts.md. After every turn, update that file (or provide the text block) with the prompt I just used.  
+• Time-Check: Start a timer. Goal is an MVP in 4-6 hours (Max window: 16h). Report 'Elapsed Time' at the end of every response. Acknowledge and let's start."
 
 ---
 
@@ -69,3 +78,13 @@ This file records user prompts, assistant actions, files touched, commands run, 
 - **Files changed:** `app/main.py`, `app/api/routes/guardrail.py`, `app/scanners/*`, `app/services/*`, `app/schemas/guardrail.py`, `app/templates/dashboard.html`, `README.md`, `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `.github/workflows/ci.yml`, `scripts/dev.sh`, `ruff.toml`, `docs/DELIVERABLES.md`, `tests/*`, `app/integrations/tagle/__init__.py`, `prompts.md`, deleted `app/templates/index.html`
 - **Commands executed:** `pytest -q`; `ruff check app tests --fix`; `pytest -q` (10 passed); `ruff check app tests`
 - **Timestamp (UTC):** 2026-05-14T17:38:44Z
+
+---
+
+## Entry 006 — Tagle report dashboard + team-share URLs
+
+- **User prompt:** Confirm whether the same codebase was updated; provide visible code changes; add a Tagle-like dashboard report; provide the list of URLs to share with the team.
+- **Assistant summary:** Added version `0.2.0`, visual `GET /tagle/report` dashboard, `GET /submission/urls` reviewer URL list, `docs/TEAM_SHARE_URLS.md`, missing `.dockerignore`, missing GitHub Actions CI workflow, README team-share section, CloudFormation JSON/YAML scanner support, and tests for the new routes/scanner path.
+- **Files changed:** `app/__init__.py`, `app/main.py`, `app/api/routes/tagle.py`, `app/api/routes/submission.py`, `app/templates/tagle_report.html`, `app/scanners/cfn_parser.py`, `app/scanners/engine.py`, `app/services/scan_service.py`, `docs/TEAM_SHARE_URLS.md`, `.dockerignore`, `.github/workflows/ci.yml`, `README.md`, `requirements.txt`, `tests/test_tagle.py`, `tests/test_scanner.py`, `tests/test_api_guardrail.py`, `tests/fixtures/cloudformation/insecure.yaml`, `prompts.md`
+- **Commands executed:** pending verification in this turn.
+- **Timestamp (UTC):** 2026-05-14

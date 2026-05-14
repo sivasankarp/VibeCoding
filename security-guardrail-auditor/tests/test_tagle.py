@@ -30,3 +30,19 @@ def test_tagle_http_endpoints() -> None:
     about = client.get("/tagle/about")
     assert about.status_code == 200
     assert "official_quiz" in about.json()
+
+    report = client.get("/tagle/report")
+    assert report.status_code == 200
+    assert "Tagle.ai-style report" in report.text
+    assert "Architect profile" in report.text
+
+
+def test_submission_urls_endpoint() -> None:
+    client = TestClient(app)
+    r = client.get("/submission/urls")
+    assert r.status_code == 200
+    body = r.json()
+    labels = {item["label"] for item in body["team_share_urls"]}
+    assert "Security dashboard" in labels
+    assert "Tagle report" in labels
+    assert body["github_repository"].startswith("https://github.com/")

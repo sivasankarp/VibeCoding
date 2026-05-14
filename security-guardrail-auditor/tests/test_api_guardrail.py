@@ -43,3 +43,15 @@ def test_scan_requires_tf() -> None:
     client = TestClient(app)
     r = client.post("/scan", data={"name": "bad"}, files={"files": ("readme.txt", b"hello", "text/plain")})
     assert r.status_code == 400
+
+
+def test_scan_accepts_cloudformation_yaml() -> None:
+    client = TestClient(app)
+    cfn_path = Path(__file__).resolve().parent / "fixtures" / "cloudformation" / "insecure.yaml"
+    files = [("files", ("insecure.yaml", cfn_path.read_bytes(), "application/x-yaml"))]
+    r = client.post("/scan", data={"name": "pytest-cfn"}, files=files)
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["scan"]["status"] == "completed"
+    assert body["scan"]["risk_score"] > 0
+    client.delete(f"/scan/{body['scan']['id']}")

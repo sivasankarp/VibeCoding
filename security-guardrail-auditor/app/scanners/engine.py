@@ -388,6 +388,198 @@ def collect_raw_findings(
     return findings
 
 
+def collect_cloudformation_findings(
+    parsed_files: Iterable[tuple[str, dict[str, Any]]],
+    raw_text_by_path: dict[str, str],
+) -> list[RawFinding]:
+    findings: list[RawFinding] = []
+    docs = list(parsed_files)
+    resources: list[tuple[str, str, str, dict[str, Any]]] = []
+
+    for path, doc in docs:
+        for logical_id, resource in (doc.get("Resources") or {}).items():
+            if not isinstance(resource, dict):
+                continue
+            resource_type = str(resource.get("Type", ""))
+            props = resource.get("Properties") or {}
+            if isinstance(props, dict):
+                resources.append((path, logical_id, resource_type, props))
+
+    for path, logical_id, resource_type, props in resources:
+        if resource_type == "AWS::S3::Bucket":
+            access_control = str(props.get("AccessControl", "")).lower()
+            if access_control in {"publicread", "publicreadwrite"}:
+                findings.append(
+                    RawFinding(
+                        rule_id="CFN_S3_PUBLIC_ACL",
+                        severity="critical",
+                        resource_type=resource_type,
+                        resource_name=logical_id,
+                        title="CloudFormation S3 bucket uses a public ACL",
+                        description=f"{logical_id} sets AccessControl to {props.get('AccessControl')!r}.",
+                        remediation="Remove public ACLs and enforce S3 Block Public Access.",
+                        terraform_fix_example="AccessControl: Private",
+                        file_path=path,
+                    )
+                )
+            pab = props.get("PublicAccessBlockConfiguration") or {}
+            if isinstance(pab, dict) and any(_boolish(pab.get(k)) is False for k in ("BlockPublicAcls", "BlockPublicPolicy")):
+                findings.append(
+                    RawFinding(
+                        rule_id="CFN_S3_PUBLIC_ACCESS_BLOCK_DISABLED",
+                        severity="high",
+                        resource_type=resource_type,
+                        resource_name=logical_id,
+                        title="CloudFormation S3 public access block is disabled",
+                        description="BlockPublicAcls or BlockPublicPolicy is false.",
+                        remediation="Set all S3 public access block options to true.",
+                        terraform_fix_example="PublicAccessBlockConfiguration:\n  BlockPublicAcls: true\n  BlockPublicPolicy: true",
+                        file_path=path,
+                    )
+                )
+
+        if resource_type == "AWS::EC2::SecurityGroup":
+            ingress = props.get("SecurityGroupIngress") or []
+            if isinstance(ingress, dict):
+                ingress = [ingress]
+            for rule in ingress if isinstance(ingress, list) else []:
+                if not isinstance(rule, dict):
+                    continue
+                if not _cidr_open_to_world(rule.get("CidrIp") or rule.get("CidrIpv6")):
+                    continue
+                try:
+                    from_port = int(rule.get("FromPort", 0))
+                    to_port = int(rule.get("ToPort", 0))
+                except (TypeError, ValueError):
+                    continue
+                protocol = str(rule.get("IpProtocol", "tcp")).lower()
+                if protocol in {"-1", "all"}:
+                    findings.append(
+                        RawFinding(
+                            rule_id="CFN_SG_ALL_TRAFFIC_OPEN",
+                            severity="critical",
+                            resource_type=resource_type,
+                            resource_name=logical_id,
+                            title="CloudFormation security group allows all traffic from the internet",
+                            description="SecurityGroupIngress permits all protocols from an internet CIDR.",
+                            remediation="Restrict protocol, ports, and CIDRs to the minimum required.",
+                            terraform_fix_example="# Replace 0.0.0.0/0 with trusted CIDRs",
+                            file_path=path,
+                        )
+                    )
+                if protocol in {"tcp", "-1", "all"} and from_port <= 22 <= to_port:
+                    findings.append(
+                        RawFinding(
+                            rule_id="CFN_SG_OPEN_SSH",
+                            severity="critical",
+                            resource_type=resource_type,
+                            resource_name=logical_id,
+                            title="CloudFormation security group allows SSH from the internet",
+                            description="SecurityGroupIngress permits port 22 from 0.0.0.0/0 or ::/0.",
+                            remediation="Use VPN, bastion restrictions, or SSM Session Manager instead of open SSH.",
+                            terraform_fix_example="CidrIp: 10.0.0.0/8",
+                            file_path=path,
+                        )
+                    )
+
+        if resource_type == "AWS::RDS::DBInstance":
+            if _boolish(props.get("PubliclyAccessible")):
+                findings.append(
+                    RawFinding(
+                        rule_id="CFN_RDS_PUBLIC",
+                        severity="critical",
+                        resource_type=resource_type,
+                        resource_name=logical_id,
+                        title="CloudFormation RDS instance is publicly accessible",
+                        description="PubliclyAccessible is true.",
+                        remediation="Place RDS in private subnets and disable public access.",
+                        terraform_fix_example="PubliclyAccessible: false",
+                        file_path=path,
+                    )
+                )
+            if _boolish(props.get("StorageEncrypted")) is False:
+                findings.append(
+                    RawFinding(
+                        rule_id="CFN_RDS_UNENCRYPTED",
+                        severity="high",
+                        resource_type=resource_type,
+                        resource_name=logical_id,
+                        title="CloudFormation RDS storage encryption disabled",
+                        description="StorageEncrypted is false.",
+                        remediation="Enable storage encryption with KMS.",
+                        terraform_fix_example="StorageEncrypted: true",
+                        file_path=path,
+                    )
+                )
+
+        if resource_type in {"AWS::IAM::Policy", "AWS::IAM::ManagedPolicy"}:
+            policy = json.dumps(props.get("PolicyDocument") or {})
+            if '"Action": "*"' in policy or '"Action":["*"]' in policy.replace(" ", ""):
+                findings.append(
+                    RawFinding(
+                        rule_id="CFN_IAM_WILDCARD_ACTION",
+                        severity="critical",
+                        resource_type=resource_type,
+                        resource_name=logical_id,
+                        title="CloudFormation IAM policy grants Action=*",
+                        description="Wildcard actions grant broad API access.",
+                        remediation="Replace wildcard actions with least-privilege action lists.",
+                        terraform_fix_example="Action:\n  - s3:GetObject",
+                        file_path=path,
+                    )
+                )
+            if '"Resource": "*"' in policy or '"Resource":["*"]' in policy.replace(" ", ""):
+                findings.append(
+                    RawFinding(
+                        rule_id="CFN_IAM_WILDCARD_RESOURCE",
+                        severity="high",
+                        resource_type=resource_type,
+                        resource_name=logical_id,
+                        title="CloudFormation IAM policy grants Resource=*",
+                        description="Wildcard resources are overly permissive.",
+                        remediation="Scope resources to ARNs or prefixes.",
+                        terraform_fix_example="Resource: arn:aws:s3:::example-bucket/*",
+                        file_path=path,
+                    )
+                )
+
+    has_trail = any(resource_type == "AWS::CloudTrail::Trail" for _, _, resource_type, _ in resources)
+    if docs and not has_trail:
+        findings.append(
+            RawFinding(
+                rule_id="CFN_CLOUDTRAIL_MISSING",
+                severity="medium",
+                resource_type="AWS::CloudTrail::Trail",
+                resource_name="*",
+                title="No CloudFormation CloudTrail resource detected",
+                description="Template did not declare CloudTrail; governance and forensic coverage may be incomplete.",
+                remediation="Add an organization or account trail with log file validation.",
+                terraform_fix_example="Type: AWS::CloudTrail::Trail",
+                file_path=docs[0][0],
+            )
+        )
+
+    for path, text in raw_text_by_path.items():
+        for rule_id, pattern in SECRET_PATTERNS:
+            if pattern.search(text):
+                findings.append(
+                    RawFinding(
+                        rule_id=f"CFN_{rule_id.upper()}",
+                        severity="critical",
+                        resource_type=None,
+                        resource_name=None,
+                        title="Potential hardcoded secret in CloudFormation",
+                        description="A literal assignment resembling a password/secret was detected.",
+                        remediation="Use Secrets Manager, SSM Parameter Store, or dynamic references.",
+                        terraform_fix_example="{{resolve:secretsmanager:secret-id:SecretString:password}}",
+                        file_path=path,
+                    )
+                )
+                break
+
+    return findings
+
+
 def summarize_severities(findings: Iterable[RawFinding]) -> dict[str, int]:
     counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
     for item in findings:
